@@ -1,0 +1,64 @@
+{% extends 'site_base.html' %}
+{% load i18n %}
+{% block extra_head %}
+    {{ block.supper }}
+    <style>
+    .import-form{
+        position: relative;
+    }
+    .import-form-mask{
+        position: absolute;
+        top:0;
+        bottom: 0;
+        right: 0;
+        left: 0;
+        background: rgba(0,0,0,0.4);
+    }
+    </style>
+{% endblock %}
+{% block body %}
+    <div ng-app="cartoview.ags2geonode" ng-controller="cartoview.ags2geonode.MainController">
+
+        <form class="well import-form" ng-submit="service.import()">
+            <div class="import-form-mask" ng-show="service.task"></div>
+            <legend>{% trans "Import ArcGIS Feature Layer" %}</legend>
+            <div class="form-group">
+                <label>Layer Name</label>
+                <input class="form-control" placeholder="Layer Name" ng-model="service.layer.name" required>
+            </div>
+            <div class="form-group">
+                <label>Layer Title</label>
+                <input class="form-control" placeholder="Layer Title" ng-model="service.layer.title" required>
+            </div>
+            <div class="form-group">
+                <label>ArcGIS Feature Layer Url</label>
+                <input type="url" class="form-control" placeholder="ArcGIS Feature Layer Url" ng-model="service.layer.url" required>
+            </div>
+            <button type="submit" class="btn btn-default">Submit</button>
+        </form>
+        <div>
+            {% verbatim %}
+            <div ng-repeat="item in service.statesLog track by $index" class="alert alert-success" role="alert">
+                {{ item.msg }}
+                <div ng-if="item.state=='SUCCESS'">
+                    <a ng-href="/layers/{{ service.task.result.layer }}" class="btn btn-success">Layer Info</a>
+                    <a ng-href="/layers/{{ service.task.result.layer }}/metadata" class="btn btn-warning">Edit Metadata</a>
+                    <a ng-href="/gs/{{ service.task.result.layer }}/style/manage" class="btn btn-warning">Manage Styles</a>
+                </div>
+            </div>
+
+            <div class="progress" ng-if="service.task.percent">
+              <div class="progress-bar progress-bar-success" role="progressbar" aria-valuenow="{{ service.task.percent }}" aria-valuemin="0" aria-valuemax="100" ng-style="getProgressStyle()">
+                {{service.task.result.loaded_features}} / {{service.task.result.features_count}} loaded
+              </div>
+            </div>
+            <!--{{ service.task.percent  }}% of data loaded-->
+            {% endverbatim %}
+        </div>
+    </div>
+{% endblock %}
+
+
+{% block extra_script %}
+    <script type="text/javascript" src="{{ STATIC_URL }}cartoview_ags2geonode/import_feature_layer.js"></script>
+{% endblock extra_script %}
