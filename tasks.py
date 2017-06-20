@@ -4,9 +4,10 @@ import sys
 import logging
 import geoserver
 import uuid
+import psycopg2
 from shapely.geometry import asShape
-from celery import shared_task, current_task
-from django.db import connections
+# from celery import shared_task, current_task
+# from django.db import connections
 from django.conf import settings
 from geonode import GeoNodeException
 from geoserver.catalog import FailedRequestError, Catalog
@@ -15,12 +16,12 @@ from geonode.layers.models import Layer
 from decimal import Decimal
 from django.utils.translation import ugettext as _
 from django.contrib.auth import get_user_model
-
+from .models import Task
 
 #celery -A cartoview worker -l info -c 10 --app=cartoview.celeryapp:app
 logger = logging.getLogger(__name__)
 
-connection = connections["datastore"]
+# connection = connections["datastore"]
 
 reload(sys)
 sys.setdefaultencoding('utf-8')
@@ -69,7 +70,7 @@ def request_json(url, params=None, method="POST"):
     return req.json()
 
 
-def create_table(name, layer_info, srid):
+def create_table(name, layer_info, srid, connection):
     cursor = connection.cursor()
     try:
         fields_def = []
@@ -86,13 +87,18 @@ def create_table(name, layer_info, srid):
         cursor.execute("CREATE INDEX spatial_{0}_the_geom ON {0} USING gist(the_geom);".format(name))
     finally:
         cursor.close()
-        print "table created success"
+        connection.commit()
 
 
-def update_status(**kwargs):
-    current_task.update_state(state='PROGRESS', meta=kwargs)
+def update_status(task, status, **kwargs):
+    print status
+    task.status = status
+    task.message = json.dumps(kwargs)
+    task.save()
 
-def load_features(url, params,layer_info, table_name, features_count, loaded_features, srid):
+    # current_task.update_state(state='PROGRESS', meta=kwargs)
+
+def load_features(url, params,layer_info, table_name, features_count, loaded_features, srid, task, connection):
     data = request_json(url, params)
     for feature in data["features"]:
         cursor = connection.cursor()
@@ -112,8 +118,9 @@ def load_features(url, params,layer_info, table_name, features_count, loaded_fea
             print json.dumps(feature)
         finally:
             cursor.close()
+            connection.commit()
             loaded_features += 1
-            update_status(features_count=features_count, loaded_features=loaded_features)
+            update_status(task, "In Progress", features_count=features_count, loaded_features=loaded_features)
     return loaded_features
 
 
@@ -168,7 +175,7 @@ def create_geonode_layer(resource, owner):
         "bbox_y1": Decimal(resource.latlon_bbox[3])
     })
     # recalculate the layer statistics
-    set_attributes(layer, overwrite=True)
+    set_attributes(layer, [], overwrite=True)
     layer.set_default_permissions()
 
 
@@ -262,48 +269,62 @@ def create_geoserver_layer(name, user, srid,
 
 
 
-@shared_task
-def import_layer_task(name, title, url, owner_username):
+# @shared_task
+def import_layer_task(name, title, url, owner_username, task_id):
+    db = ogc_server_settings.datastore_db
+    connection = psycopg2.connect(
+        host=db['HOST'],
+        user=db['USER'],
+        password=db['PASSWORD'],
+        dbname=db['NAME'])
+    task = Task.objects.get(id=task_id)
     owner = get_user_model().objects.get(username=owner_username)
     print "creating table " + name
-    print url
-    update_status(msg="Loading layer info")
+
+    update_status(task, "In Progress", msg="Loading layer info")
     layer_info = request_json(url)
-    print json.dumps(layer_info)
+
     srid = get_srid(layer_info)
     if layer_info["type"] == "Feature Layer":
-        create_table(name, layer_info, srid)
+        try:
+            create_table(name, layer_info, srid, connection)
+        except:
+            update_status(task, "Error", msg="cannot create database table try to change the name")
+            return
         # max_record_count = min(10, layer_info["maxRecordCount"])
         max_record_count = min(1000, layer_info["maxRecordCount"])
         query_url = "%s/query" % url
-        update_status(msg="Loading features count")
+        update_status(task, "In Progress", msg="Loading features count")
         params = dict(f="json", where="1=1", returnCountOnly="true")
         layer_features_count = request_json(query_url, params)
 
         features_count = layer_features_count["count"]
-        update_status(features_count=features_count)
+        update_status(task, "In Progress",features_count=features_count)
         loaded_features = 0
         if features_count > max_record_count:  # request ids first
             print "load features by ids"
-            update_status(msg="Loading features ids",loaded_features=loaded_features, features_count=features_count)
+            update_status(task, "In Progress", msg="Loading features ids",loaded_features=loaded_features, features_count=features_count)
             params = dict(f="json", where="1=1", returnIdsOnly="true")
             layer_features_ids = request_json(query_url, params)
-            update_status(msg="Loading features",loaded_features=loaded_features, features_count=features_count)
+            update_status(task, "In Progress", msg="Loading features",loaded_features=loaded_features, features_count=features_count)
             while len(layer_features_ids["objectIds"]) > 0:
                 ids = layer_features_ids["objectIds"][0: max_record_count - 1]
                 del layer_features_ids["objectIds"][0: max_record_count - 1]
                 params = dict(f="json", outFields="*", objectIds=",".join([str(i) for i in ids]))
                 print "load features from %d to %d" % (ids[0],ids[-1], )
                 try:
-                    loaded_features = load_features(query_url, params, layer_info, name, features_count, loaded_features, srid)
+                    loaded_features = load_features(query_url, params, layer_info, name, features_count, loaded_features, srid, task, connection)
                 except:
                     print "cannot load features from %d to %d" % (ids[0],ids[-1], )
         else:  # request all features
             print "load all feature at one"
-            update_status(msg="Loading features", loaded_features=loaded_features, features_count=features_count)
+            update_status(task, "In Progress", msg="Loading features", loaded_features=loaded_features, features_count=features_count)
             params = dict(f="json", where="1=1", outFields="*")
-            loaded_features = load_features(query_url, params, layer_info, name, features_count, loaded_features, srid)
+            loaded_features = load_features(query_url, params, layer_info, name, features_count, loaded_features, srid, task, connection)
 
         layer_resource = create_geoserver_layer(name, owner, srid, title=title)
+        print 'added to geoserver'
         create_geonode_layer(layer_resource, owner)
-        return {"msg": "Layer Imported Successfully", "layer": "%s:%s" %(layer_resource.workspace.name, layer_resource.name,)}
+        print 'geonode layer %s:%s' %(layer_resource.workspace.name, layer_resource.name,)
+        update_status(task, "Finished", msg="Layer imported successfully", layer="%s:%s" %(layer_resource.workspace.name, layer_resource.name,))
+        # return {"msg": "Layer Imported Successfully", "layer": "%s:%s" %(layer_resource.workspace.name, layer_resource.name,)}

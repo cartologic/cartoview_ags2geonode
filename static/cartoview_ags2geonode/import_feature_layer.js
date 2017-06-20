@@ -21,28 +21,30 @@
         this.layer = {};
 
         this.import = function () {
-            service.statesLog = [];
+            service.statusLog = [];
             service.task = null;
             var lastMsg = "";
+            service.showMask = true;
             var getState = function (task) {
                 service.task = task;
-                if(task.result && task.result.msg && lastMsg!=task.result.msg){
-                    service.statesLog.push({
-                        msg: task.result.msg,
-                        state: task.state
+                if(task.message && task.message.msg && lastMsg!=task.message.msg){
+                    service.statusLog.push({
+                        msg: task.message.msg,
+                        status: task.status
                     });
-                    lastMsg = task.result.msg;
+                    lastMsg = task.message.msg;
                 }
-                if(task.result && task.result.features_count){
-                    task.percent = Math.round((task.result.loaded_features / task.result.features_count) * 100)
+                if(task.message && task.message.features_count){
+                    task.percent = Math.round((task.message.loaded_features / task.message.features_count) * 100)
                 }
-                if(task.state != "SUCCESS") {
+
+                if(task.status == "In Progress") {
                     $timeout(function () {
-                        $http.get("import/state?task_id=" + task.id).success(getState)
+                        $http.get("import/status/?task_id=" + task.id).success(getState)
                     }, 2000);
                 }
-                else{
-
+                else {
+                  service.showMask = false;
                 }
             };
             $http.post("", this.layer).success(getState)
