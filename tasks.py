@@ -282,14 +282,18 @@ def import_layer_task(name, title, url, owner_username, task_id):
     print "creating table " + name
 
     update_status(task, "In Progress", msg="Loading layer info")
-    layer_info = request_json(url)
 
+    try:
+        layer_info = request_json(url)
+    except:
+        update_status(task, "Error", msg="Error: Cannot connect to arcgis server")
+        return
     srid = get_srid(layer_info)
     if layer_info["type"] == "Feature Layer":
         try:
             create_table(name, layer_info, srid, connection)
         except:
-            update_status(task, "Error", msg="cannot create database table try to change the name")
+            update_status(task, "Error", msg="Error: Cannot create database table try to change the name")
             return
         # max_record_count = min(10, layer_info["maxRecordCount"])
         max_record_count = min(1000, layer_info["maxRecordCount"])
