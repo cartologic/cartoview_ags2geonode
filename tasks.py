@@ -184,14 +184,15 @@ def create_geoserver_layer(name, user, srid,
         title=None,
         abstract=None,
         charset='UTF-8'):
+    print 'create geoserver layer ................'
     if "geonode.geoserver" in settings.INSTALLED_APPS:
-
+        print 'create geoserver layer ................'
         _user, _password = ogc_server_settings.credentials
         #
 
         # Step 2. Check that it is uploading to the same resource type as
         # the existing resource
-        logger.info('>>> Step 2. Make sure we are not trying to overwrite a '
+        print('>>> Step 2. Make sure we are not trying to overwrite a '
                     'existing resource named [%s] with the wrong type', name)
         the_layer_type = "vector"
 
@@ -226,22 +227,26 @@ def create_geoserver_layer(name, user, srid,
                                    'does not match type of existing '
                                    'resource type '
                                    '%s' % (name, the_layer_type, existing_type))
-                            logger.info(msg)
+                            print(msg)
                             raise GeoNodeException(msg)
 
 
-        logger.debug('Creating vector layer: [%s]', name)
+        print('Creating vector layer: [%s]', name)
         ds = create_feature_store(cat, workspace)
         gs_resource = gs_catalog.publish_featuretype(name, ds, "EPSG:" + str(srid))
 
 
         # # Step 7. Create the style and assign it to the created resource
         # # FIXME: Put this in gsconfig.py
-        logger.info('>>> Step 7. Creating style for [%s]' % name)
+        print('>>> Step 7. Creating style for [%s]' % name)
         publishing = cat.get_layer(name)
 
-        sld = get_sld_for(publishing)
-
+        try:
+            # geonode 2.6.x
+            sld = get_sld_for(cat, publishing)
+        except:
+            # geonode 2.5.x
+            sld = get_sld_for(publishing)
         style = None
         if sld is not None:
             try:
@@ -271,6 +276,7 @@ def create_geoserver_layer(name, user, srid,
 
 # @shared_task
 def import_layer_task(name, title, url, owner_username, task_id):
+    name = name.lower()
     db = ogc_server_settings.datastore_db
     connection = psycopg2.connect(
         host=db['HOST'],
