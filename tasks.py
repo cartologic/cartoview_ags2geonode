@@ -301,8 +301,9 @@ def import_layer_task(name, title, url, owner_username, task_id):
         except:
             update_status(task, "Error", msg="Error: Cannot create database table try to change the name")
             return
-        # max_record_count = min(10, layer_info["maxRecordCount"])
-        max_record_count = min(1000, layer_info["maxRecordCount"])
+        max_record_count = 1000
+        #max_record_count = min(1000, layer_info["maxRecordCount"])
+        
         query_url = "%s/query" % url
         update_status(task, "In Progress", msg="Loading features count")
         params = dict(f="json", where="1=1", returnCountOnly="true")

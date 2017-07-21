@@ -31,11 +31,26 @@
                 <input class="form-control" placeholder="Layer Title" ng-model="service.layer.title" required>
             </div>
             <div class="form-group">
+
                 <label>ArcGIS Feature Layer Url</label>
                 <input type="url" class="form-control" placeholder="ArcGIS Feature Layer Url" ng-model="service.layer.url" required>
             </div>
+
+<div style="    border: solid 1px lightgray;
+    padding: 10px;
+    margin-bottom: 10px;
+    border-radius: 5px;
+    background-color: lightyellow;">
+<p> <strong>Hint! </strong>
+This app converts any arcgis server feature service layer or map service layer into a geonode layer
+Please input the feature url in these formats: </p>
+<p>http://&lt;url&gt;/arcgis/rest/services/&lt;folder&gt;/&lt;map&gt;/MapServer/&lt;feature ID&gt; </p>
+<p>http://&lt;url&gt;/arcgis/rest/services/	&lt;folder&gt;/&lt;map&gt;/FeatureServer/&lt;feature ID&gt;</p> </div>
+
             <button type="submit" class="btn btn-default" ng-disabled="service.showMask">Submit</button>
+
         </form>
+
         <div>
             {% verbatim %}
             <div ng-repeat="item in service.statusLog track by $index" ng-class="{'alert-danger': item.status == 'Error' , 'alert-success': item.status != 'Error'}" class="alert " role="alert">
