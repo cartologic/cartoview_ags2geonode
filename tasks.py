@@ -20,6 +20,10 @@ from .models import Task
 
 #celery -A cartoview worker -l info -c 10 --app=cartoview.celeryapp:app
 logger = logging.getLogger(__name__)
+file_handler = logging.FileHandler('trace.log')
+file_handler.setLevel(logging.DEBUG)
+logger.addHandler(file_handler)
+
 
 # connection = connections["datastore"]
 
@@ -37,7 +41,7 @@ geometry_types_map = {
     "esriGeometryPolygon": "Polygon",
     "esriGeometryPolyline": "LineString"
 }
-neglect_fields = ["SHAPE_Length", "SHAPE_Area"]
+neglect_fields = ["SHAPE_Length", "SHAPE_Area", "SHAPE.LEN"]
 
 def get_wkt(geometry):
     if "rings" in geometry:
@@ -85,6 +89,8 @@ def create_table(name, layer_info, srid, connection):
         sql = "create table {name}(id serial primary key, the_geom geometry({geometry_type},{srid}),{fields});"
         cursor.execute(sql.format(**table))
         cursor.execute("CREATE INDEX spatial_{0}_the_geom ON {0} USING gist(the_geom);".format(name))
+    except Exception, e:
+        print e
     finally:
         cursor.close()
         connection.commit()
@@ -113,7 +119,12 @@ def load_features(url, params,layer_info, table_name, features_count, loaded_fea
             values_exp = ",".join(["ST_GeomFromText('%s', %d)" % (get_wkt(feature["geometry"]), srid,)] + ['%s' for index in range(len(fields_data))])
             sql = "insert into %s(%s) values(%s);" % (table_name, ",".join(fields_def), values_exp)
             cursor.execute(sql, fields_data)
-        except:
+        except Exception as e:
+            logger.error(sql % tuple(fields_data))
+            logger.error(e.message)
+            logger.error(json.dumps(feature))
+            print sql % tuple(fields_data)
+            print e.message
             print "unable to insert feature"
             print json.dumps(feature)
         finally:
@@ -325,8 +336,11 @@ def import_layer_task(name, title, url, owner_username, task_id):
                 print "load features from %d to %d" % (ids[0],ids[-1], )
                 try:
                     loaded_features = load_features(query_url, params, layer_info, name, features_count, loaded_features, srid, task, connection)
-                except:
-                    print "cannot load features from %d to %d" % (ids[0],ids[-1], )
+                except Exception,e:
+                    logger.debug('-------------------------------------')
+                    logger.debug(e)
+                    logger.debug('-------------------------------------')
+                    print "cannot load features from %d to %d" % (ids[0], ids[-1], )
         else:  # request all features
             print "load all feature at one"
             update_status(task, "In Progress", msg="Loading features", loaded_features=loaded_features, features_count=features_count)
