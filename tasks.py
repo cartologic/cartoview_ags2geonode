@@ -124,7 +124,7 @@ def load_features(url, params,layer_info, table_name, features_count, loaded_fea
                         fields_data.append(feature["attributes"][f["name"]])
             values_exp = ",".join(["ST_GeomFromText('%s', %d)" % (get_wkt(feature["geometry"]), srid,)] + ['%s' for index in range(len(fields_data))])
             sql = "insert into %s(%s) values(%s);" % (table_name, ",".join(fields_def), values_exp)
-            cursor.execute(sql, fields_data)
+            cursor.execute(sql, [ field_data.encode("UTF-8") if isinstance(field_data, basestring) else field_data for field_data in fields_data])
         except Exception as e:
             logger.error(sql % tuple(fields_data))
             logger.error(e.message)
