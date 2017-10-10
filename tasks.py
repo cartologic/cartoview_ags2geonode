@@ -44,14 +44,17 @@ geometry_types_map = {
 neglect_fields = ["SHAPE_Length", "SHAPE_Area", "SHAPE.LEN"]
 
 def get_wkt(geometry):
-    if "rings" in geometry:
-        shape = asShape({"type": "Polygon","coordinates": geometry["rings"]})
-    elif "paths" in geometry:
-        paths = geometry["paths"] if len(geometry["paths"]) > 1 else geometry["paths"][0]
-        shape = asShape({'type': 'LineString', 'coordinates': paths})
-    else:
-        shape = asShape({'type': 'Point', 'coordinates': [geometry["x"], geometry["y"]]})
-    return shape.wkt
+    try:
+        if "rings" in geometry:
+            shape = asShape({"type": "Polygon","coordinates": geometry["rings"]})
+        elif "paths" in geometry:
+            paths = geometry["paths"] if len(geometry["paths"]) > 1 else geometry["paths"][0]
+            shape = asShape({'type': 'LineString', 'coordinates': paths})
+        else:
+            shape = asShape({'type': 'Point', 'coordinates': [geometry["x"], geometry["y"]]})
+        return shape.wkt
+    except Exception as e:
+        print e
 
 
 
@@ -69,9 +72,12 @@ def get_srid(layer_info):
 
 
 def request_json(url, params=None, method="POST"):
-    params = params or dict(f="json")
-    req = requests.request(method, url, data=params)
-    return req.json()
+    try:
+        params = params or dict(f="json")
+        req = requests.request(method, url, data=params)
+        return req.json()
+    except Exception as e:
+        print e
 
 
 def create_table(name, layer_info, srid, connection):
