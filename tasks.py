@@ -126,15 +126,19 @@ def load_features(url, params,layer_info, table_name, features_count, loaded_fea
 
 
 def create_feature_store(cat, workspace):
-    dsname = ogc_server_settings.DATASTORE
+    db = ogc_server_settings.datastore_db
+    db_engine = 'postgis' if 'postgis' in db['ENGINE'] else db['ENGINE']
+    dsname = db['NAME']
     ds_exists = False
     try:
-        ds = get_store(cat, dsname, workspace=workspace)
+       
+        ds= cat.get_store(dsname,settings.DEFAULT_WORKSPACE)
+        print(ds)
         ds_exists = True
     except FailedRequestError:
         ds = cat.create_datastore(dsname, workspace=workspace)
-    db = ogc_server_settings.datastore_db
-    db_engine = 'postgis' if 'postgis' in db['ENGINE'] else db['ENGINE']
+ 
+ 
     ds.connection_parameters.update({
         'validate connections': 'true',
         'max connections': '10',
@@ -184,9 +188,8 @@ def create_geoserver_layer(name, user, srid,
         title=None,
         abstract=None,
         charset='UTF-8'):
-    print 'create geoserver layer ................'
+
     if "geonode.geoserver" in settings.INSTALLED_APPS:
-        print 'create geoserver layer ................'
         _user, _password = ogc_server_settings.credentials
         #
 
@@ -199,11 +202,11 @@ def create_geoserver_layer(name, user, srid,
         # Get a short handle to the gsconfig geoserver catalog
         cat = Catalog(ogc_server_settings.internal_rest, _user, _password)
 
-        workspace = cat.get_default_workspace()
+        workspace = cat.get_workspace(settings. DEFAULT_WORKSPACE)
         # Check if the store exists in geoserver
         try:
             store = get_store(cat, name, workspace=workspace)
-
+            print("-------------------------",workspace)
         except FailedRequestError as e:
             # There is no store, ergo the road is clear
             pass
