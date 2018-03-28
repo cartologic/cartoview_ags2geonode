@@ -17,6 +17,7 @@ from decimal import Decimal
 from django.utils.translation import ugettext as _
 from django.contrib.auth import get_user_model
 from .models import Task
+from slugify import slugify
 
 #celery -A cartoview worker -l info -c 10 --app=cartoview.celeryapp:app
 logger = logging.getLogger(__name__)
@@ -293,7 +294,7 @@ def create_geoserver_layer(name, user, srid,
 
 # @shared_task
 def import_layer_task(name, title, url, owner_username, task_id):
-    name = name.lower()
+    name = slugify(name, separator='_', to_lower=True)
     db = ogc_server_settings.datastore_db
     connection = psycopg2.connect(
         host=db['HOST'],
